@@ -1,0 +1,107 @@
+// Rename to XAUUSD_M1_AnalysisOnlyEA.mq5 before compiling.
+// ANALYSIS ONLY: this EA never sends, modifies, or closes any order.
+#property strict
+
+input string InpSymbol="";
+input int InpFastEMA=20;
+input int InpSlowEMA=50;
+input int InpRSIPeriod=14;
+input int InpATRPeriod=14;
+input double InpStopATR=1.80;
+input double InpRewardRisk=1.50;
+input double InpReferenceLot=0.01;
+input int InpEntryOffsetPoints=2;
+input bool InpPopupAlert=true;
+
+string tradeSymbol;
+int m1Fast=INVALID_HANDLE,m1Slow=INVALID_HANDLE,rsiHandle=INVALID_HANDLE,atrHandle=INVALID_HANDLE;
+int m5Fast=INVALID_HANDLE,m5Slow=INVALID_HANDLE;
+datetime lastBar=0;
+string lastSignal="";
+string prefix="XAU_Analysis_";
+
+int OnInit()
+{
+   tradeSymbol=(InpSymbol=="" ? _Symbol : InpSymbol);
+   if(!SymbolSelect(tradeSymbol,true)) return INIT_FAILED;
+   m1Fast=iMA(tradeSymbol,PERIOD_M1,InpFastEMA,0,MODE_EMA,PRICE_CLOSE);
+   m1Slow=iMA(tradeSymbol,PERIOD_M1,InpSlowEMA,0,MODE_EMA,PRICE_CLOSE);
+   rsiHandle=iRSI(tradeSymbol,PERIOD_M1,InpRSIPeriod,PRICE_CLOSE);
+   atrHandle=iATR(tradeSymbol,PERIOD_M1,InpATRPeriod);
+   m5Fast=iMA(tradeSymbol,PERIOD_M5,InpFastEMA,0,MODE_EMA,PRICE_CLOSE);
+   m5Slow=iMA(tradeSymbol,PERIOD_M5,InpSlowEMA,0,MODE_EMA,PRICE_CLOSE);
+   if(m1Fast==INVALID_HANDLE || m1Slow==INVALID_HANDLE || rsiHandle==INVALID_HANDLE || atrHandle==INVALID_HANDLE || m5Fast==INVALID_HANDLE || m5Slow==INVALID_HANDLE) return INIT_FAILED;
+   Comment("XAUUSD Analysis Only\nLoading M1/M5 data...");
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   IndicatorRelease(m1Fast); IndicatorRelease(m1Slow); IndicatorRelease(rsiHandle); IndicatorRelease(atrHandle); IndicatorRelease(m5Fast); IndicatorRelease(m5Slow);
+   DeleteLines(); Comment("");
+}
+
+void OnTick()
+{
+   datetime current=iTime(tradeSymbol,PERIOD_M1,0);
+   if(current==0 || current==lastBar) return;
+   lastBar=current;
+   Analyze();
+}
+
+void Analyze()
+{
+   double fast[],slow[],rsi[],atr[],hFast[],hSlow[]; MqlRates price[];
+   ArraySetAsSeries(fast,true); ArraySetAsSeries(slow,true); ArraySetAsSeries(rsi,true); ArraySetAsSeries(atr,true); ArraySetAsSeries(hFast,true); ArraySetAsSeries(hSlow,true); ArraySetAsSeries(price,true);
+   if(CopyBuffer(m1Fast,0,0,3,fast)<3 || CopyBuffer(m1Slow,0,0,3,slow)<3 || CopyBuffer(rsiHandle,0,0,3,rsi)<3 || CopyBuffer(atrHandle,0,0,3,atr)<3 || CopyBuffer(m5Fast,0,0,2,hFast)<2 || CopyBuffer(m5Slow,0,0,2,hSlow)<2 || CopyRates(tradeSymbol,PERIOD_M1,0,3,price)<3) return;
+   bool upTrend=hFast[1]>hSlow[1];
+   bool downTrend=hFast[1]<hSlow[1];
+   bool buy=upTrend && fast[1]>slow[1] && price[1].close>fast[1] && rsi[2]<45 && rsi[1]>50;
+   bool sell=downTrend && fast[1]<slow[1] && price[1].close<fast[1] && rsi[2]>55 && rsi[1]<50;
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   double point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   string trend=(upTrend ? "UP" : (downTrend ? "DOWN" : "NEUTRAL"));
+   if(!buy && !sell)
+   {
+      DeleteLines();
+      Comment("XAUUSD — ANALYSIS ONLY\nAction: WAIT\nM5 trend: "+trend+"\nM1 RSI: "+DoubleToString(rsi[1],1)+"\nNo confirmed entry setup.\nNext update: at close of next M1 candle.");
+      lastSignal="WAIT";
+      return;
+   }
+   bool isBuy=buy;
+   double entry=(isBuy ? price[1].high+InpEntryOffsetPoints*point : price[1].low-InpEntryOffsetPoints*point);
+   double stopDistance=atr[1]*InpStopATR;
+   double sl=(isBuy ? entry-stopDistance : entry+stopDistance);
+   double tp=(isBuy ? entry+stopDistance*InpRewardRisk : entry-stopDistance*InpRewardRisk);
+   double estimatedRisk=EstimateRisk(stopDistance);
+   DrawLine(prefix+"ENTRY",entry,isBuy ? clrLime : clrTomato,"ENTRY");
+   DrawLine(prefix+"SL",sl,clrRed,"SL");
+   DrawLine(prefix+"TP",tp,clrDeepSkyBlue,"TP");
+   string signal=(isBuy ? "BUY" : "SELL");
+   string report="XAUUSD — ANALYSIS ONLY\nAction: "+signal+" setup\nSuggested entry: "+DoubleToString(entry,digits)+"\nStop loss: "+DoubleToString(sl,digits)+"\nTake profit: "+DoubleToString(tp,digits)+"\nEstimated risk at 0.01 lot: "+DoubleToString(estimatedRisk,2)+"\nM5 trend: "+trend+" | RSI: "+DoubleToString(rsi[1],1);
+   Comment(report);
+   if(InpPopupAlert && lastSignal!=signal+DoubleToString(entry,digits)) Alert(report);
+   lastSignal=signal+DoubleToString(entry,digits);
+}
+
+double EstimateRisk(double distance)
+{
+   double tickSize=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_SIZE);
+   double tickValue=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_VALUE);
+   if(tickSize<=0 || tickValue<=0) return 0;
+   return distance/tickSize*tickValue*InpReferenceLot;
+}
+
+void DrawLine(string name,double level,color lineColor,string label)
+{
+   if(ObjectFind(0,name)<0) ObjectCreate(0,name,OBJ_HLINE,0,0,level);
+   ObjectSetDouble(0,name,OBJPROP_PRICE,level);
+   ObjectSetInteger(0,name,OBJPROP_COLOR,lineColor);
+   ObjectSetInteger(0,name,OBJPROP_WIDTH,2);
+   ObjectSetString(0,name,OBJPROP_TEXT,label);
+}
+
+void DeleteLines()
+{
+   ObjectDelete(0,prefix+"ENTRY"); ObjectDelete(0,prefix+"SL"); ObjectDelete(0,prefix+"TP");
+}

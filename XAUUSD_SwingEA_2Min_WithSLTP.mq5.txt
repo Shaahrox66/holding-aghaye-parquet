@@ -1,0 +1,116 @@
+// Rename to XAUUSD_SwingEA_2Min_WithSLTP.mq5 before compiling.
+// M1 swing EA: checks signals every 2 minutes and sends SL/TP with every order.
+#property strict
+#include <Trade/Trade.mqh>
+
+input string InpSymbol="";
+input double InpLot=0.01;
+input double InpMaxRiskMoney=1.40;
+input long InpMagic=20260824;
+input int InpEveryM1Bars=2;
+input double InpStopATR=1.80;
+input double InpRewardRisk=1.50;
+input int InpMaxSpreadPoints=80;
+input int InpDeviationPoints=20;
+
+CTrade trade;
+string tradeSymbol;
+int ema20=INVALID_HANDLE,ema50=INVALID_HANDLE,rsi=INVALID_HANDLE,atr=INVALID_HANDLE,htf20=INVALID_HANDLE,htf50=INVALID_HANDLE;
+datetime lastBar=0;
+int barsSinceCheck=0;
+
+int OnInit()
+{
+   tradeSymbol=(InpSymbol=="" ? _Symbol : InpSymbol);
+   if(!SymbolSelect(tradeSymbol,true) || InpEveryM1Bars<1) return INIT_FAILED;
+   ema20=iMA(tradeSymbol,PERIOD_M1,20,0,MODE_EMA,PRICE_CLOSE);
+   ema50=iMA(tradeSymbol,PERIOD_M1,50,0,MODE_EMA,PRICE_CLOSE);
+   rsi=iRSI(tradeSymbol,PERIOD_M1,14,PRICE_CLOSE);
+   atr=iATR(tradeSymbol,PERIOD_M1,14);
+   htf20=iMA(tradeSymbol,PERIOD_M5,20,0,MODE_EMA,PRICE_CLOSE);
+   htf50=iMA(tradeSymbol,PERIOD_M5,50,0,MODE_EMA,PRICE_CLOSE);
+   if(ema20==INVALID_HANDLE || ema50==INVALID_HANDLE || rsi==INVALID_HANDLE || atr==INVALID_HANDLE || htf20==INVALID_HANDLE || htf50==INVALID_HANDLE) return INIT_FAILED;
+   trade.SetExpertMagicNumber(InpMagic); trade.SetDeviationInPoints(InpDeviationPoints);
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   IndicatorRelease(ema20); IndicatorRelease(ema50); IndicatorRelease(rsi); IndicatorRelease(atr); IndicatorRelease(htf20); IndicatorRelease(htf50);
+}
+
+void OnTick()
+{
+   EnsureSLTP();
+   datetime current=iTime(tradeSymbol,PERIOD_M1,0);
+   if(current==0 || current==lastBar) return;
+   lastBar=current;
+   if(++barsSinceCheck<InpEveryM1Bars) return;
+   barsSinceCheck=0;
+   FindAndOpenSignal();
+}
+
+void OnTradeTransaction(const MqlTradeTransaction &transaction,const MqlTradeRequest &request,const MqlTradeResult &result)
+{
+   // After any deal event, verify the EA's own XAUUSD position has protection.
+   EnsureSLTP();
+}
+
+void FindAndOpenSignal()
+{
+   if(PositionSelect(tradeSymbol) || !TradingAllowed()) return;
+   double f[],s[],rr[],aa[],hf[],hs[]; MqlRates candle[];
+   ArraySetAsSeries(f,true); ArraySetAsSeries(s,true); ArraySetAsSeries(rr,true); ArraySetAsSeries(aa,true); ArraySetAsSeries(hf,true); ArraySetAsSeries(hs,true); ArraySetAsSeries(candle,true);
+   if(CopyBuffer(ema20,0,0,3,f)<3 || CopyBuffer(ema50,0,0,3,s)<3 || CopyBuffer(rsi,0,0,3,rr)<3 || CopyBuffer(atr,0,0,3,aa)<3 || CopyBuffer(htf20,0,0,2,hf)<2 || CopyBuffer(htf50,0,0,2,hs)<2 || CopyRates(tradeSymbol,PERIOD_M1,0,3,candle)<3) return;
+   bool buy=hf[1]>hs[1] && f[1]>s[1] && candle[1].close>f[1] && rr[2]<45 && rr[1]>50;
+   bool sell=hf[1]<hs[1] && f[1]<s[1] && candle[1].close<f[1] && rr[2]>55 && rr[1]<50;
+   if(buy) OpenWithSLTP(ORDER_TYPE_BUY,aa[1]);
+   else if(sell) OpenWithSLTP(ORDER_TYPE_SELL,aa[1]);
+}
+
+bool TradingAllowed()
+{
+   MqlTick tick; double point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   return TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && SymbolInfoTick(tradeSymbol,tick) && point>0 && (tick.ask-tick.bid)/point<=InpMaxSpreadPoints;
+}
+
+double SafeStopDistance(const double atrValue)
+{
+   double tickSize=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_SIZE),tickValue=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_VALUE),point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   if(tickSize<=0 || tickValue<=0 || point<=0 || InpLot<=0) return 0;
+   double maxDistance=InpMaxRiskMoney/(tickValue*InpLot)*tickSize;
+   double minDistance=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)*point+point;
+   double desired=MathMin(atrValue*InpStopATR,maxDistance);
+   if(desired<minDistance) return 0; // Broker's minimum stop would exceed the chosen risk cap.
+   return desired;
+}
+
+void OpenWithSLTP(const ENUM_ORDER_TYPE type,const double atrValue)
+{
+   double distance=SafeStopDistance(atrValue); if(distance<=0) { Print("Signal skipped: SL would exceed risk cap or broker minimum stop."); return; }
+   MqlTick tick; if(!SymbolInfoTick(tradeSymbol,tick)) return;
+   double price=(type==ORDER_TYPE_BUY ? tick.ask : tick.bid);
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   double sl=NormalizeDouble(type==ORDER_TYPE_BUY ? price-distance : price+distance,digits);
+   double tp=NormalizeDouble(type==ORDER_TYPE_BUY ? price+distance*InpRewardRisk : price-distance*InpRewardRisk,digits);
+   bool ok=(type==ORDER_TYPE_BUY ? trade.Buy(InpLot,tradeSymbol,0,sl,tp,"Swing 2m SLTP") : trade.Sell(InpLot,tradeSymbol,0,sl,tp,"Swing 2m SLTP"));
+   if(!ok) Print("Order failed: ",trade.ResultRetcode()," ",trade.ResultRetcodeDescription());
+   EnsureSLTP();
+}
+
+void EnsureSLTP()
+{
+   if(!PositionSelect(tradeSymbol) || (long)PositionGetInteger(POSITION_MAGIC)!=InpMagic) return;
+   double oldSL=PositionGetDouble(POSITION_SL),oldTP=PositionGetDouble(POSITION_TP);
+   if(oldSL>0 && oldTP>0) return;
+   double aa[]; ArraySetAsSeries(aa,true); if(CopyBuffer(atr,0,0,1,aa)!=1) return;
+   double distance=SafeStopDistance(aa[0]); if(distance<=0) return;
+   MqlTick tick; if(!SymbolInfoTick(tradeSymbol,tick)) return;
+   ENUM_POSITION_TYPE type=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   double open=PositionGetDouble(POSITION_PRICE_OPEN);
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   double sl=oldSL,tp=oldTP;
+   if(type==POSITION_TYPE_BUY) { if(sl==0) sl=open-distance; if(tp==0) tp=open+distance*InpRewardRisk; }
+   if(type==POSITION_TYPE_SELL) { if(sl==0) sl=open+distance; if(tp==0) tp=open-distance*InpRewardRisk; }
+   if(!trade.PositionModify(tradeSymbol,NormalizeDouble(sl,digits),NormalizeDouble(tp,digits))) Print("SL/TP retry failed: ",trade.ResultRetcodeDescription());
+}

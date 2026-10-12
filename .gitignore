@@ -1,0 +1,14 @@
+# System & Temp files
+tmp/
+.tmp/
+*.tmp
+.codex-status.txt
+.codex-summary.txt
+.inspect.png
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store

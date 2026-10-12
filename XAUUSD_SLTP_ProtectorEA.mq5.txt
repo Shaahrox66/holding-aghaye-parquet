@@ -1,0 +1,101 @@
+// Rename to XAUUSD_SLTP_ProtectorEA.mq5 before compiling.
+// This EA NEVER opens trades. It only adds missing SL/TP to matching XAUUSD positions.
+#property strict
+#include <Trade/Trade.mqh>
+
+input string InpSymbol="";                    // Empty = chart symbol
+input long InpManagedMagic=20260824;           // Magic of the previous EA
+input bool InpOnlyThisMagic=true;              // Safer: do not alter manual/other EA trades
+input double InpStopATR=1.80;
+input double InpRewardRisk=1.50;
+input double InpMaxRiskMoney=1.40;             // Account currency; $1.40 for a $70 account
+input bool InpApplyToAlreadyOpenPosition=true;
+
+CTrade trade;
+string tradeSymbol;
+int atrHandle=INVALID_HANDLE;
+
+int OnInit()
+{
+   tradeSymbol=(InpSymbol=="" ? _Symbol : InpSymbol);
+   if(!SymbolSelect(tradeSymbol,true)) return INIT_FAILED;
+   atrHandle=iATR(tradeSymbol,PERIOD_M1,14);
+   if(atrHandle==INVALID_HANDLE) return INIT_FAILED;
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   if(atrHandle!=INVALID_HANDLE) IndicatorRelease(atrHandle);
+   Comment("");
+}
+
+void OnTick()
+{
+   ProtectPosition();
+}
+
+void ProtectPosition()
+{
+   if(!PositionSelect(tradeSymbol))
+   {
+      Comment("SL/TP Protector\nNo open position on "+tradeSymbol+".");
+      return;
+   }
+   if(InpOnlyThisMagic && (long)PositionGetInteger(POSITION_MAGIC)!=InpManagedMagic)
+   {
+      Comment("SL/TP Protector\nPosition found, but its magic number does not match. No change made.");
+      return;
+   }
+   double oldSL=PositionGetDouble(POSITION_SL),oldTP=PositionGetDouble(POSITION_TP);
+   if(oldSL>0 && oldTP>0)
+   {
+      Comment("SL/TP Protector\nProtection already exists. No change made.");
+      return;
+   }
+   double atr[]; ArraySetAsSeries(atr,true);
+   if(CopyBuffer(atrHandle,0,0,1,atr)!=1 || atr[0]<=0)
+   {
+      Comment("SL/TP Protector\nWaiting for ATR data.");
+      return;
+   }
+   MqlTick tick;
+   if(!SymbolInfoTick(tradeSymbol,tick)) return;
+   double volume=PositionGetDouble(POSITION_VOLUME);
+   double tickSize=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_SIZE);
+   double tickValue=SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_VALUE);
+   double point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   int stops=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_TRADE_STOPS_LEVEL);
+   if(volume<=0 || tickSize<=0 || tickValue<=0 || point<=0) return;
+   double atrDistance=atr[0]*InpStopATR;
+   double maxDistance=InpMaxRiskMoney/(tickValue*volume)*tickSize;
+   double distance=MathMin(atrDistance,maxDistance);
+   double minDistance=stops*point+point;
+   distance=MathMax(distance,minDistance);
+   ENUM_POSITION_TYPE type=(ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+   double open=PositionGetDouble(POSITION_PRICE_OPEN);
+   double sl=oldSL,tp=oldTP;
+   if(type==POSITION_TYPE_BUY)
+   {
+      if(sl==0) sl=MathMin(open-distance,tick.bid-minDistance);
+      if(tp==0) tp=MathMax(open+distance*InpRewardRisk,tick.ask+minDistance);
+   }
+   else if(type==POSITION_TYPE_SELL)
+   {
+      if(sl==0) sl=MathMax(open+distance,tick.ask+minDistance);
+      if(tp==0) tp=MathMin(open-distance*InpRewardRisk,tick.bid-minDistance);
+   }
+   else return;
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   sl=NormalizeDouble(sl,digits); tp=NormalizeDouble(tp,digits);
+   if(trade.PositionModify(tradeSymbol,sl,tp))
+   {
+      Comment("SL/TP Protector\nProtection added.\nSL: "+DoubleToString(sl,digits)+"\nTP: "+DoubleToString(tp,digits));
+      Print("SL/TP added: SL=",DoubleToString(sl,digits)," TP=",DoubleToString(tp,digits));
+   }
+   else
+   {
+      Comment("SL/TP Protector\nCould not set levels: "+trade.ResultRetcodeDescription());
+      Print("SL/TP modify failed: ",trade.ResultRetcode()," ",trade.ResultRetcodeDescription());
+   }
+}

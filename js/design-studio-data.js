@@ -1,0 +1,1 @@
+window.DESIGN_STUDIO_PROJECTS = [];

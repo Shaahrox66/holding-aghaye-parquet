@@ -1,0 +1,80 @@
+// Rename this file to XAUUSD_M1_2Min_StatusEA.mq5 before compiling.
+#property strict
+#include <Trade/Trade.mqh>
+
+input string InpSymbol="";
+input double InpFixedLot=0.01;
+input double InpMaxRiskPercent=2.00;
+input int InpEveryBars=2;
+input int InpMaxSpreadPoints=80;
+input double InpStopATR=1.80;
+input double InpRewardRisk=1.50;
+input long InpMagic=20260824;
+
+CTrade trade;
+string tradeSymbol;
+int ema20=INVALID_HANDLE,ema50=INVALID_HANDLE,rsi=INVALID_HANDLE,atr=INVALID_HANDLE,htf20=INVALID_HANDLE,htf50=INVALID_HANDLE;
+datetime lastBar=0;
+int bars=0;
+
+void Status(string text)
+{
+   string line="XAUUSD Status EA\n"+TimeToString(TimeCurrent(),TIME_SECONDS)+"\n"+text;
+   Comment(line);
+   Print(line);
+}
+
+int OnInit()
+{
+   tradeSymbol=(InpSymbol=="" ? _Symbol : InpSymbol);
+   if(!SymbolSelect(tradeSymbol,true) || InpEveryBars<1) return INIT_FAILED;
+   ema20=iMA(tradeSymbol,PERIOD_M1,20,0,MODE_EMA,PRICE_CLOSE);
+   ema50=iMA(tradeSymbol,PERIOD_M1,50,0,MODE_EMA,PRICE_CLOSE);
+   rsi=iRSI(tradeSymbol,PERIOD_M1,14,PRICE_CLOSE);
+   atr=iATR(tradeSymbol,PERIOD_M1,14);
+   htf20=iMA(tradeSymbol,PERIOD_M5,20,0,MODE_EMA,PRICE_CLOSE);
+   htf50=iMA(tradeSymbol,PERIOD_M5,50,0,MODE_EMA,PRICE_CLOSE);
+   if(ema20==INVALID_HANDLE || ema50==INVALID_HANDLE || rsi==INVALID_HANDLE || atr==INVALID_HANDLE || htf20==INVALID_HANDLE || htf50==INVALID_HANDLE) return INIT_FAILED;
+   trade.SetExpertMagicNumber(InpMagic);
+   Status("Loaded. Waiting for the next 2-minute check.");
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   IndicatorRelease(ema20); IndicatorRelease(ema50); IndicatorRelease(rsi); IndicatorRelease(atr); IndicatorRelease(htf20); IndicatorRelease(htf50);
+   Comment("");
+}
+
+void OnTick()
+{
+   datetime t=iTime(tradeSymbol,PERIOD_M1,0);
+   if(t==0 || t==lastBar) return;
+   lastBar=t;
+   if(++bars<InpEveryBars) { Status("Waiting: next analysis is in one M1 candle."); return; }
+   bars=0;
+   CheckSignal();
+}
+
+void CheckSignal()
+{
+   if(PositionSelect(tradeSymbol)) { Status("No entry: there is already an open XAUUSD position."); return; }
+   if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) || !MQLInfoInteger(MQL_TRADE_ALLOWED)) { Status("BLOCKED: Algo Trading is off."); return; }
+   MqlTick tick; double point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   if(!SymbolInfoTick(tradeSymbol,tick) || point<=0) { Status("BLOCKED: no price tick received."); return; }
+   double spread=(tick.ask-tick.bid)/point;
+   if(spread>InpMaxSpreadPoints) { Status("BLOCKED: spread="+DoubleToString(spread,0)+" points; limit="+IntegerToString(InpMaxSpreadPoints)); return; }
+   double e20[],e50[],rr[],aa[],h20[],h50[]; MqlRates rate[];
+   ArraySetAsSeries(e20,true); ArraySetAsSeries(e50,true); ArraySetAsSeries(rr,true); ArraySetAsSeries(aa,true); ArraySetAsSeries(h20,true); ArraySetAsSeries(h50,true); ArraySetAsSeries(rate,true);
+   if(CopyBuffer(ema20,0,0,3,e20)<3 || CopyBuffer(ema50,0,0,3,e50)<3 || CopyBuffer(rsi,0,0,3,rr)<3 || CopyBuffer(atr,0,0,3,aa)<3 || CopyBuffer(htf20,0,0,2,h20)<2 || CopyBuffer(htf50,0,0,2,h50)<2 || CopyRates(tradeSymbol,PERIOD_M1,0,3,rate)<3) { Status("Waiting: indicator data is not ready."); return; }
+   double loss=aa[1]*InpStopATR/SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_SIZE)*SymbolInfoDouble(tradeSymbol,SYMBOL_TRADE_TICK_VALUE)*InpFixedLot;
+   double maxLoss=AccountInfoDouble(ACCOUNT_EQUITY)*InpMaxRiskPercent/100.0;
+   if(loss>maxLoss) { Status("BLOCKED: SL risk for 0.01 lot = "+DoubleToString(loss,2)+"; allowed = "+DoubleToString(maxLoss,2)); return; }
+   bool buy=h20[1]>h50[1] && e20[1]>e50[1] && rate[1].close>e20[1] && rr[2]<45 && rr[1]>50;
+   bool sell=h20[1]<h50[1] && e20[1]<e50[1] && rate[1].close<e20[1] && rr[2]>55 && rr[1]<50;
+   if(!buy && !sell) { Status("No trade: no confirmed M1 RSI pullback in the M5 trend. RSI="+DoubleToString(rr[1],1)); return; }
+   double distance=aa[1]*InpStopATR,price=(buy ? tick.ask : tick.bid),sl=(buy ? price-distance : price+distance),tp=(buy ? price+distance*InpRewardRisk : price-distance*InpRewardRisk);
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   bool ok=(buy ? trade.Buy(InpFixedLot,tradeSymbol,0,NormalizeDouble(sl,digits),NormalizeDouble(tp,digits),"status EA") : trade.Sell(InpFixedLot,tradeSymbol,0,NormalizeDouble(sl,digits),NormalizeDouble(tp,digits),"status EA"));
+   Status(ok ? "ORDER SENT: "+(buy ? "BUY" : "SELL")+" 0.01 lot." : "ORDER FAILED: "+trade.ResultRetcodeDescription());
+}

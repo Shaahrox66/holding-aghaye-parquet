@@ -1,0 +1,109 @@
+// Rename to XAUUSD_5Min_EntryPlannerEA.mq5 before compiling.
+// ANALYSIS ONLY — never sends, modifies, or closes orders.
+#property strict
+
+input string InpSymbol="";
+input int InpM1FastEMA=9;
+input int InpM1SlowEMA=21;
+input int InpM5FastEMA=20;
+input int InpM5SlowEMA=50;
+input double InpStopATR=1.50;
+input double InpRewardRisk=1.50;
+input int InpEntryOffsetPoints=2;
+input int InpMaxSpreadPoints=80;
+input bool InpPopupAlert=false;
+
+string tradeSymbol;
+int m1Fast=INVALID_HANDLE,m1Slow=INVALID_HANDLE,m1RSI=INVALID_HANDLE,m1ATR=INVALID_HANDLE;
+int m5Fast=INVALID_HANDLE,m5Slow=INVALID_HANDLE;
+datetime lastM1Bar=0;
+string objectPrefix="Plan5m_";
+string previousPlan="";
+
+int OnInit()
+{
+   tradeSymbol=(InpSymbol=="" ? _Symbol : InpSymbol);
+   if(!SymbolSelect(tradeSymbol,true)) return INIT_FAILED;
+   m1Fast=iMA(tradeSymbol,PERIOD_M1,InpM1FastEMA,0,MODE_EMA,PRICE_CLOSE);
+   m1Slow=iMA(tradeSymbol,PERIOD_M1,InpM1SlowEMA,0,MODE_EMA,PRICE_CLOSE);
+   m1RSI=iRSI(tradeSymbol,PERIOD_M1,14,PRICE_CLOSE);
+   m1ATR=iATR(tradeSymbol,PERIOD_M1,14);
+   m5Fast=iMA(tradeSymbol,PERIOD_M5,InpM5FastEMA,0,MODE_EMA,PRICE_CLOSE);
+   m5Slow=iMA(tradeSymbol,PERIOD_M5,InpM5SlowEMA,0,MODE_EMA,PRICE_CLOSE);
+   if(m1Fast==INVALID_HANDLE || m1Slow==INVALID_HANDLE || m1RSI==INVALID_HANDLE || m1ATR==INVALID_HANDLE || m5Fast==INVALID_HANDLE || m5Slow==INVALID_HANDLE) return INIT_FAILED;
+   Comment("5-Minute Entry Planner\nWaiting for the next M1 candle close...");
+   return INIT_SUCCEEDED;
+}
+
+void OnDeinit(const int reason)
+{
+   IndicatorRelease(m1Fast); IndicatorRelease(m1Slow); IndicatorRelease(m1RSI); IndicatorRelease(m1ATR); IndicatorRelease(m5Fast); IndicatorRelease(m5Slow);
+   ClearPlan(); Comment("");
+}
+
+void OnTick()
+{
+   datetime current=iTime(tradeSymbol,PERIOD_M1,0);
+   if(current==0 || current==lastM1Bar) return;
+   lastM1Bar=current;
+   MakePlan();
+}
+
+void MakePlan()
+{
+   MqlTick tick; double point=SymbolInfoDouble(tradeSymbol,SYMBOL_POINT);
+   if(!SymbolInfoTick(tradeSymbol,tick) || point<=0) return;
+   double spread=(tick.ask-tick.bid)/point;
+   if(spread>InpMaxSpreadPoints)
+   {
+      ClearPlan(); ShowWait("WAIT — spread "+DoubleToString(spread,0)+" points is above limit."); return;
+   }
+   double f1[],s1[],rsi[],atr[],f5[],s5[]; MqlRates candle[];
+   ArraySetAsSeries(f1,true); ArraySetAsSeries(s1,true); ArraySetAsSeries(rsi,true); ArraySetAsSeries(atr,true); ArraySetAsSeries(f5,true); ArraySetAsSeries(s5,true); ArraySetAsSeries(candle,true);
+   if(CopyBuffer(m1Fast,0,0,3,f1)<3 || CopyBuffer(m1Slow,0,0,3,s1)<3 || CopyBuffer(m1RSI,0,0,3,rsi)<3 || CopyBuffer(m1ATR,0,0,3,atr)<3 || CopyBuffer(m5Fast,0,0,2,f5)<2 || CopyBuffer(m5Slow,0,0,2,s5)<2 || CopyRates(tradeSymbol,PERIOD_M1,0,3,candle)<3) return;
+   bool m5Up=f5[1]>s5[1], m5Down=f5[1]<s5[1];
+   bool m1Up=f1[1]>s1[1] && candle[1].close>f1[1] && rsi[1]>=52 && rsi[1]<=70;
+   bool m1Down=f1[1]<s1[1] && candle[1].close<f1[1] && rsi[1]>=30 && rsi[1]<=48;
+   if(!((m5Up && m1Up) || (m5Down && m1Down)))
+   {
+      ClearPlan();
+      string trend=(m5Up ? "UP" : (m5Down ? "DOWN" : "NEUTRAL"));
+      ShowWait("WAIT — M5 trend: "+trend+", M1 RSI: "+DoubleToString(rsi[1],1)+". No aligned setup.");
+      return;
+   }
+   bool buy=m5Up && m1Up;
+   double entry=(buy ? candle[1].high+InpEntryOffsetPoints*point : candle[1].low-InpEntryOffsetPoints*point);
+   double stopDistance=atr[1]*InpStopATR;
+   double sl=(buy ? entry-stopDistance : entry+stopDistance);
+   double tp=(buy ? entry+stopDistance*InpRewardRisk : entry-stopDistance*InpRewardRisk);
+   int digits=(int)SymbolInfoInteger(tradeSymbol,SYMBOL_DIGITS);
+   string action=(buy ? "ENTER BUY" : "ENTER SELL");
+   DrawLevel("ENTRY",entry,buy ? clrLime : clrTomato,2);
+   DrawLevel("SL",sl,clrRed,2);
+   DrawLevel("TP",tp,clrDeepSkyBlue,2);
+   string plan="5-MINUTE ENTRY PLAN (analysis only)\nAction: "+action+"\nEntry: "+DoubleToString(entry,digits)+"\nSL: "+DoubleToString(sl,digits)+"\nTP: "+DoubleToString(tp,digits)+"\nValid until: "+TimeToString(TimeCurrent()+300,TIME_MINUTES)+"\nM5 and M1 trend aligned | RSI: "+DoubleToString(rsi[1],1);
+   Comment(plan);
+   if(InpPopupAlert && previousPlan!=action+DoubleToString(entry,digits)) Alert(plan);
+   previousPlan=action+DoubleToString(entry,digits);
+}
+
+void ShowWait(string reason)
+{
+   Comment("5-MINUTE ENTRY PLAN (analysis only)\n"+reason+"\nNo entry is suggested for the next 5 minutes.");
+   previousPlan="WAIT";
+}
+
+void DrawLevel(string label,double price,color clr,int width)
+{
+   string name=objectPrefix+label;
+   if(ObjectFind(0,name)<0) ObjectCreate(0,name,OBJ_HLINE,0,0,price);
+   ObjectSetDouble(0,name,OBJPROP_PRICE,price);
+   ObjectSetInteger(0,name,OBJPROP_COLOR,clr);
+   ObjectSetInteger(0,name,OBJPROP_WIDTH,width);
+   ObjectSetString(0,name,OBJPROP_TEXT,label);
+}
+
+void ClearPlan()
+{
+   ObjectDelete(0,objectPrefix+"ENTRY"); ObjectDelete(0,objectPrefix+"SL"); ObjectDelete(0,objectPrefix+"TP");
+}

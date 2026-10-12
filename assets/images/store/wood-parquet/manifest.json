@@ -1,0 +1,162 @@
+[
+  {
+    "date": "20250424",
+    "folder": "01-farhadi-valiasr",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp",
+      "image-06.webp"
+    ]
+  },
+  {
+    "date": "20250810",
+    "folder": "02-ahmadi-roshdie",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20251001",
+    "folder": "03-karimi-abresan",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp"
+    ]
+  },
+  {
+    "date": "20251009",
+    "folder": "04-rostami-ferdos",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp"
+    ]
+  },
+  {
+    "date": "20251010",
+    "folder": "05-moradi-parvaz",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp"
+    ]
+  },
+  {
+    "date": "20251012",
+    "folder": "06-hosseini-golshahr",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20251116",
+    "folder": "07-jafari-pastor",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20251228",
+    "folder": "08-rahimi-lalezar",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260103",
+    "folder": "09-akbari-valiasr",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260216",
+    "folder": "10-sadeghi-roshdie",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260223",
+    "folder": "11-naderi-abresan",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260413",
+    "folder": "12-tavakoli-ferdos",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260418",
+    "folder": "13-yousefi-parvaz",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp",
+      "image-05.webp"
+    ]
+  },
+  {
+    "date": "20260427",
+    "folder": "14-rezaei-golshahr",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp",
+      "image-04.webp"
+    ]
+  },
+  {
+    "date": "20260521",
+    "folder": "15-ansari-pastor",
+    "images": [
+      "image-01.webp",
+      "image-02.webp",
+      "image-03.webp"
+    ]
+  }
+]

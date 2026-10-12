@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="نمونه پروژه‌های استودیو طراحی و معماری شاهرخ خانلی">
+  <title>استودیو طراحی و معماری | شاهرخ خانلی</title>
+  <link rel="stylesheet" href="../css/design-studio.css">
+  <link rel="stylesheet" href="../css/design-studio-latest.css">
+</head>
+<body>
+  <header class="studio-header">
+    <a class="home-link" href="../index.html" aria-label="بازگشت به صفحه اصلی">
+      <span aria-hidden="true">⌂</span>
+      <span>صفحه اصلی</span>
+    </a>
+    <div class="brand-block">
+      <strong>استودیو طراحی و معماری</strong>
+      <span>Shahrokh Khanli Studio</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero-slider" aria-label="پروژه‌های منتخب">
+      <div class="hero-stage" id="heroStage">
+        <img id="heroImage" alt="پروژه منتخب استودیو طراحی و معماری">
+        <div class="hero-shade"></div>
+        <div class="hero-copy">
+          <span id="heroCategory"></span>
+          <h1 id="heroTitle">استودیو طراحی و معماری</h1>
+          <p id="heroSummary">مجموعه‌ای از پروژه‌های اجراشده با تمرکز بر جزئیات، تناسب و کارایی.</p>
+          <button class="hero-open" id="heroOpen" type="button">مشاهده پروژه</button>
+        </div>
+        <div class="hero-controls">
+          <button id="heroNext" type="button" aria-label="اسلاید بعدی">‹</button>
+          <span id="heroCounter">۰۱ / ۰۱</span>
+          <button id="heroPrev" type="button" aria-label="اسلاید قبلی">›</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="projects-section" aria-labelledby="projectsTitle">
+      <div class="section-heading">
+        <div>
+          <span class="eyebrow">آرشیو پروژه‌ها</span>
+          <h2 id="projectsTitle">طراحی‌ها و اجراها</h2>
+        </div>
+        <div class="filter-bar" id="filterBar" aria-label="فیلتر دسته‌بندی پروژه‌ها"></div>
+      </div>
+      <div class="project-grid" id="projectGrid"></div>
+      <p class="empty-state" id="emptyState" hidden>هنوز تصویری برای این بخش وارد نشده است.</p>
+    </section>
+  </main>
+
+  <dialog class="gallery-dialog" id="galleryDialog" aria-label="گالری پروژه">
+    <div class="gallery-shell">
+      <header class="gallery-header">
+        <div>
+          <span id="galleryCategory"></span>
+          <h2 id="galleryTitle"></h2>
+        </div>
+        <div class="gallery-actions">
+          <button id="galleryPlay" type="button" aria-label="شروع یا توقف نمایش خودکار">▶</button>
+          <button id="galleryClose" type="button" aria-label="بستن گالری">×</button>
+        </div>
+      </header>
+      <div class="gallery-viewer">
+        <button class="gallery-nav gallery-next" id="galleryNext" type="button" aria-label="عکس بعدی">‹</button>
+        <figure>
+          <img id="galleryImage" alt="">
+          <figcaption id="galleryCounter"></figcaption>
+        </figure>
+        <button class="gallery-nav gallery-prev" id="galleryPrev" type="button" aria-label="عکس قبلی">›</button>
+      </div>
+      <div class="gallery-thumbs" id="galleryThumbs" aria-label="تصاویر پروژه"></div>
+    </div>
+  </dialog>
+
+  <script src="../js/design-studio-data.js"></script>
+  <script src="../js/design-studio.js"></script>
+  <script src="../js/design-studio-data.js"></script>
+  <script src="../js/design-studio-latest.js"></script>
+</body>
+</html>

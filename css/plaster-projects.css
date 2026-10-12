@@ -1,0 +1,3 @@
+@import url('wood-parquet.css');
+:root{--gold:#c9a87c;--cream:#f7f2e9;--bg:#111111;--panel:#1a1918}
+.category-hero>img{filter:saturate(.72) contrast(1.03);object-position:center 48%}.hero-shade{background:linear-gradient(90deg,rgba(12,11,10,.9),rgba(12,11,10,.14) 70%),linear-gradient(0deg,rgba(12,11,10,.48),transparent 55%)}.project-image img{filter:saturate(.85)}.project-body strong{font-size:20px}.dialog-gallery{background:#d8d4cd}.dialog-info>p:first-child{font-size:14px;color:#947047}.brand strong{color:var(--gold)}
